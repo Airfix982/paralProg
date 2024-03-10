@@ -7,7 +7,6 @@
 #include <Eigen/Dense>
 
 
-const int MATRIX_SIZE = 500;
 
 double** getMatrix(int n, int m, bool isEmpty)
 {
@@ -36,25 +35,25 @@ double** getMatrix(int n, int m, bool isEmpty)
 	return matrix;
 }
 
-void mulMatrices(double** matrix1, double** matrix2, double** resultMatrix, int& operationsCounter)
+void mulMatrices(double** matrix1, double** matrix2, double** resultMatrix, long long& operationsCounter, int matrixSize)
 {
-	for (int i = 0; i < MATRIX_SIZE; ++i)
+	for (int i = 0; i < matrixSize; ++i)
 	{
-		for (int j = 0; j < MATRIX_SIZE; ++j)
+		for (int j = 0; j < matrixSize; ++j)
 		{
 			resultMatrix[i][j] = 0.0;
 		}
 	}
 
-	for (int i = 0; i < MATRIX_SIZE; ++i)
+	for (int i = 0; i < matrixSize; ++i)
 	{
-		for (int j = 0; j < MATRIX_SIZE; ++j)
+		for (int j = 0; j < matrixSize; ++j)
 		{
-			for (int k = 0; k < MATRIX_SIZE; ++k)
+			for (int k = 0; k < matrixSize; ++k)
 			{
 				resultMatrix[i][j] += matrix1[i][k] * matrix2[k][j];
-				operationsCounter++;
 			}
+			operationsCounter++;
 		}
 	}
 }
@@ -76,45 +75,72 @@ bool compareMatrices(double** matrix1, double** matrix2, Eigen::MatrixXd& eigenR
 	return result.isApprox(eigenResult, 1e-10);
 }
 
-void writeJsonToFile(const std::string& filePath, int operationsCounter, bool isCorrect, double durationSeconds) 
+
+
+int main() 
 {
-	std::string json = "{\n";
-	json += "  \"OperationsCount\": " + std::to_string(operationsCounter) + ",\n";
-	json += "  \"IsMultiplicationCorrect\": " + std::string(isCorrect ? "true" : "false") + ",\n";
-	json += "  \"DurationSeconds\": " + std::to_string(durationSeconds) + "\n";
-	json += "}\n";
+	const int repetitions = 5;
+	std::vector<double> averageDurations;
+	std::vector<long long> averageOperations;
 
-	std::ofstream outFile(filePath);
-	if (outFile.is_open()) {
-		outFile << json;
-		outFile.close();
+	std::ofstream outFile("performance.csv");
+	outFile << "MatrixSize, AverageDuration, AverageOperations\n";
+
+	for (int matrixSize = 50; matrixSize <= 801; matrixSize += 50) 
+	{
+		long long totalDuration = 0;
+		long long totalOperations = 0;
+
+		for (int i = 0; i < repetitions; ++i) 
+		{
+			double** matrix1 = getMatrix(matrixSize, matrixSize, false);
+			double** matrix2 = getMatrix(matrixSize, matrixSize, false);
+			double** resultMatrix = getMatrix(matrixSize, matrixSize, true);
+
+			long long operationsCounter = 0;
+
+			auto start = std::chrono::high_resolution_clock::now();
+			mulMatrices(matrix1, matrix2, resultMatrix, operationsCounter, matrixSize);
+			auto stop = std::chrono::high_resolution_clock::now();
+
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+
+			totalDuration += duration;
+			totalOperations += operationsCounter;
+
+
+			Eigen::MatrixXd eigenResult = convertToEigen(resultMatrix, matrixSize, matrixSize);
+			if (i == 0) 
+			{ 
+				bool isCorrect = compareMatrices(matrix1, matrix2, eigenResult, matrixSize, matrixSize);
+				if (!isCorrect) 
+				{
+					std::cerr << "Matrix multiplication is incorrect!" << std::endl;
+				}
+			}
+
+			for (int j = 0; j < matrixSize; j++)
+			{
+				delete[] matrix1[j];
+				delete[] matrix2[j];
+				delete[] resultMatrix[j];
+			}
+			delete[] matrix1;
+			delete[] matrix2;
+			delete[] resultMatrix;
+		}
+
+		double averageDuration = static_cast<double>(totalDuration) / repetitions;
+		long long averageOperation = totalOperations / repetitions;
+
+		outFile << matrixSize << ", " << averageDuration << ", " << averageOperation << "\n";
+
+		averageDurations.push_back(averageDuration);
+		averageOperations.push_back(averageOperation);
+		std::cout << "multiplicated " << matrixSize << " operations " << totalOperations << std::endl;
 	}
-	else {
-		std::cerr << "Unable to open file for writing JSON data.\n";
-	}
-}
 
-int main()
-{
-
-	double** matrix1 = getMatrix(MATRIX_SIZE, MATRIX_SIZE, false);
-	double** matrix2 = getMatrix(MATRIX_SIZE, MATRIX_SIZE, false);
-	double** resultMatrix = getMatrix(MATRIX_SIZE, MATRIX_SIZE, true);
-
-	int operatoinsCounter = 0;
-
-	auto start = std::chrono::high_resolution_clock::now();
-	mulMatrices(matrix1, matrix2, resultMatrix, operatoinsCounter);
-	auto stop = std::chrono::high_resolution_clock::now();
-
-	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-
-	Eigen::MatrixXd eigenResult = convertToEigen(resultMatrix, MATRIX_SIZE, MATRIX_SIZE);
-
-	bool isCorrect = compareMatrices(matrix1, matrix2, eigenResult, MATRIX_SIZE, MATRIX_SIZE);
-
-	std::string filePath = "..//matrixData.json"; 
-	writeJsonToFile(filePath, operatoinsCounter, isCorrect, duration.count());
+	outFile.close();
 
 	return 0;
 }
