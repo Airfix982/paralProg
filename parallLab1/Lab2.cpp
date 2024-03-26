@@ -5,6 +5,7 @@
 #include <string>
 #include<chrono>
 #include <Eigen/Dense>
+#include <omp.h>
 
 
 
@@ -45,6 +46,7 @@ void mulMatrices(double** matrix1, double** matrix2, double** resultMatrix, long
 		}
 	}
 
+	#pragma omp parallel for collapse(2)
 	for (int i = 0; i < matrixSize; ++i)
 	{
 		for (int j = 0; j < matrixSize; ++j)
@@ -53,12 +55,21 @@ void mulMatrices(double** matrix1, double** matrix2, double** resultMatrix, long
 			{
 				resultMatrix[i][j] += matrix1[i][k] * matrix2[k][j];
 			}
+			#pragma omp atomic
 			operationsCounter++;
+		}
+	}
+
+	#pragma omp parallel
+	{
+		#pragma omp master
+		{
+			std::cout << "Number of threads: " << omp_get_num_threads() << std::endl;
 		}
 	}
 }
 
-Eigen::MatrixXd convertToEigen(double** matrix, int n, int m) 
+Eigen::MatrixXd convertToEigen(double** matrix, int n, int m)
 {
 	Eigen::MatrixXd mat(n, m);
 	for (int i = 0; i < n; ++i) {
@@ -77,21 +88,21 @@ bool compareMatrices(double** matrix1, double** matrix2, Eigen::MatrixXd& eigenR
 
 
 
-int main() 
+int main()
 {
 	const int repetitions = 5;
 	std::vector<double> averageDurations;
 	std::vector<long long> averageOperations;
 
-	std::ofstream outFile("./csv/performance.csv");
+	std::ofstream outFile("./csv/performance_openMP.csv");
 	outFile << "MatrixSize, AverageDuration, AverageOperations\n";
 
-	for (int matrixSize = 50; matrixSize <= 801; matrixSize += 50) 
+	for (int matrixSize = 50; matrixSize <= 801; matrixSize += 50)
 	{
 		long long totalDuration = 0;
 		long long totalOperations = 0;
 
-		for (int i = 0; i < repetitions; ++i) 
+		for (int i = 0; i < repetitions; ++i)
 		{
 			double** matrix1 = getMatrix(matrixSize, matrixSize, false);
 			double** matrix2 = getMatrix(matrixSize, matrixSize, false);
@@ -110,10 +121,10 @@ int main()
 
 
 			Eigen::MatrixXd eigenResult = convertToEigen(resultMatrix, matrixSize, matrixSize);
-			if (i == 0) 
-			{ 
+			if (i == 0)
+			{
 				bool isCorrect = compareMatrices(matrix1, matrix2, eigenResult, matrixSize, matrixSize);
-				if (!isCorrect) 
+				if (!isCorrect)
 				{
 					std::cerr << "Matrix multiplication is incorrect!" << std::endl;
 				}
